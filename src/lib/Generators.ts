@@ -27,6 +27,7 @@ export class Generators {
       <li>Scott Petrovic: Project Maintainer</li>
       <li>Quaternius: Base human model, rig, and animations. <a href="http://quaternius.com/" target="_blank" rel="noopener noreferrer">quaternius.com</a></li>
       <li>Sketchpunklab: Provided algorithm to help retarget human rigs for animations. <a target="_blank" href="https://x.com/SketchpunkLabs">See social media account</a></li>
+      <li>Lino Emmenegger (oni-swr) - Adding custom animation importer.</li>
       <li>Three.js Contributors: For the amazing Three.js library. <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">threejs.org</a></li>
     </ul>
 
