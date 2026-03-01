@@ -142,7 +142,9 @@ export class AnimationRetargetService {
       // Create a track for each target bone this source bone maps to. Will mostly just rename
       // a bone with the mapping
       target_bone_names.forEach((target_bone_name) => {
-        const new_track_name = RetargetUtils.create_track_name(target_bone_name, track_property)
+        // track name is in the format of "boneName.property"
+        const new_track_name = `${target_bone_name}.${track_property}`
+
         const times_copy = Float32Array.from(track.times as ArrayLike<number>)
         const values_copy = Float32Array.from(track.values as ArrayLike<number>)
 

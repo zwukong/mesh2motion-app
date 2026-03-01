@@ -133,14 +133,6 @@ export class RetargetUtils {
   }
 
   /**
-   * Create a track name in the format expected by Three.js
-   * For named bones, use: BoneName.property
-   */
-  static create_track_name (bone_name: string, property: string): string {
-    return `${bone_name}.${property}`
-  }
-
-  /**
    * Parse a track name to extract bone name and property (e.g., "quaternion", "position", "scale")
    * Handles various formats like "boneName.property" or ".bones[boneName].property"
    */
@@ -184,6 +176,22 @@ export class RetargetUtils {
     })
 
     return reverse_mappings
+  }
+
+  /**
+   * Create a reverse mapping for one-to-one use cases: source bone name -> target bone name.
+   * If multiple targets map to the same source, the first mapping wins.
+   */
+  static reverse_bone_mapping_one_to_one (bone_mappings: Map<string, string>): Map<string, string> {
+    const reverse_mapping = new Map<string, string>()
+
+    bone_mappings.forEach((source_bone_name, target_bone_name) => {
+      if (!reverse_mapping.has(source_bone_name)) {
+        reverse_mapping.set(source_bone_name, target_bone_name)
+      }
+    })
+
+    return reverse_mapping
   }
 
   /**
