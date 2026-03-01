@@ -1,8 +1,7 @@
 import {
-  AnimationClip, type Object3D, QuaternionKeyframeTrack,
+  AnimationClip, QuaternionKeyframeTrack,
   VectorKeyframeTrack, Scene, Group, type SkinnedMesh,
-  Skeleton,
-  type Bone
+  type Skeleton
 } from 'three'
 import { RetargetUtils, type TrackNameParts } from './RetargetUtils.ts'
 import { TargetBoneMappingType } from './steps/StepBoneMapping.ts'
@@ -171,9 +170,9 @@ export class AnimationRetargetService {
   // #region PRIVATE METHODS
 
   private apply_human_swing_twist_retargeting (source_clip: AnimationClip, target_mapping_type: TargetBoneMappingType): AnimationClip {
-    // the retargeter needs Skeleton inputs fot both source and target.
+    // the retargeter needs Skeleton inputs for both source and target.
     // the source armature is a Group, so we need to convert to a THREE.Skeleton before we can continue
-    const source_skeleton: Skeleton | null = this.create_skeleton_from_source(this.source_armature)
+    const source_skeleton: Skeleton | null = RetargetUtils.create_skeleton_from_group_object(this.source_armature)
     if (source_skeleton === null) {
       console.error('Failed to extract source skeleton from source armature for Human Retargeter.')
       return source_clip.clone()
@@ -184,7 +183,9 @@ export class AnimationRetargetService {
       return source_clip.clone()
     }
 
-    const detached_target_skeleton: Skeleton = this.clone_skeleton(this.target_skinned_meshes[0].skeleton)
+    // we don't want to mutate/modify the original target skeleton since it is shared
+    // across the app and will create issues as we change animations for retargeting later.
+    const detached_target_skeleton: Skeleton = RetargetUtils.clone_skeleton(this.target_skinned_meshes[0].skeleton)
 
     // create a custom "Rig" for the source and the target skeletons
     const source_rig: Rig = new Rig(source_skeleton)
@@ -231,104 +232,6 @@ export class AnimationRetargetService {
     console.log('getting retargeted clip:', retargeted_clip.tracks)
 
     return retargeted_clip
-  }
-
-  /**
-   * Utility: Convert a Group (with Armature and Bone hierarchy) to a THREE.Skeleton
-   * @param group - The root Group containing the Armature and Bone hierarchy
-   * @returns Skeleton or null if not found
-   */
-  private create_skeleton_from_source (group: Group): Skeleton | null {
-    // Find the Armature child
-    const armature = group.children.find(child => child.type === 'Object3D' &&
-      child.name.toLowerCase().includes('armature'))
-
-    if (armature === undefined) return null
-
-    // Find the root Bone under the Armature
-    const root_bone = armature.children.find(child => child.type === 'Bone') as Bone | undefined
-
-    if (root_bone === undefined) return null
-
-    const detached_armature = armature.clone(true)
-    const bones = this.collect_bones(detached_armature)
-
-    if (bones.length === 0) return null
-
-    const skeleton = new Skeleton(bones)
-    skeleton.calculateInverses()
-    skeleton.pose()
-    return skeleton
-  }
-
-  private clone_skeleton (source_skeleton: Skeleton): Skeleton {
-    const original_to_clone = new Map<Bone, Bone>()
-
-    const root_bones = source_skeleton.bones.filter((bone) =>
-      bone.parent === null || bone.parent.type !== 'Bone'
-    )
-
-    const detached_parent_cache = new Map<Object3D, Object3D>()
-
-    const ensure_detached_parent = (source_parent: Object3D): Object3D => {
-      const cached_parent = detached_parent_cache.get(source_parent)
-      if (cached_parent !== undefined) {
-        return cached_parent
-      }
-
-      const detached_parent = new Group()
-      source_parent.updateWorldMatrix(true, false)
-      source_parent.matrixWorld.decompose(detached_parent.position, detached_parent.quaternion, detached_parent.scale)
-      detached_parent.updateMatrixWorld(true)
-
-      detached_parent_cache.set(source_parent, detached_parent)
-      return detached_parent
-    }
-
-    root_bones.forEach((root_bone) => {
-      const cloned_root = root_bone.clone(true)
-
-      if (root_bone.parent !== null && root_bone.parent.type !== 'Bone') {
-        const detached_parent = ensure_detached_parent(root_bone.parent)
-        detached_parent.add(cloned_root)
-      }
-
-      const stack: Array<{ original: Bone, cloned: Bone }> = [{ original: root_bone, cloned: cloned_root }]
-
-      while (stack.length > 0) {
-        const pair = stack.pop()
-        if (pair === undefined) continue
-
-        original_to_clone.set(pair.original, pair.cloned)
-
-        const original_children = pair.original.children.filter(child => child.type === 'Bone') as Bone[]
-        const cloned_children = pair.cloned.children.filter(child => child.type === 'Bone') as Bone[]
-
-        for (let i = 0; i < original_children.length; i++) {
-          stack.push({
-            original: original_children[i],
-            cloned: cloned_children[i]
-          })
-        }
-      }
-    })
-
-    const cloned_bones = source_skeleton.bones
-      .map((bone) => original_to_clone.get(bone))
-      .filter((bone): bone is Bone => bone !== undefined)
-
-    const cloned_bone_inverses = source_skeleton.boneInverses.map((inverse) => inverse.clone())
-    const cloned_skeleton = new Skeleton(cloned_bones, cloned_bone_inverses)
-    cloned_skeleton.pose()
-
-    return cloned_skeleton
-  }
-
-  // Recursively collect all bones. part of extract_skeleton_from_group()
-  private collect_bones (object: Object3D, bones: Bone[] = []): Bone[] {
-    if (object.type === 'Bone') bones.push(object as Bone)
-    object.children.forEach(child => this.collect_bones(child, bones))
-    return bones
   }
 
   // #endregion
