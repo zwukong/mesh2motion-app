@@ -4,6 +4,7 @@ import { ProcessStep } from './enums/ProcessStep'
 import { TransformSpace } from './enums/TransformSpace'
 import { Utility } from './Utilities'
 import { ModelCleanupUtility } from './processes/load-model/ModelCleanupUtility'
+import { type Bone } from 'three'
 
 export class EventListeners {
   constructor (private readonly bootstrap: Mesh2MotionEngine) {}
@@ -78,6 +79,17 @@ export class EventListeners {
       // Store undo state when we start dragging (event.value = true)
       if (event.value && this.bootstrap.process_step === ProcessStep.EditSkeleton) {
         this.bootstrap.edit_skeleton_step.store_bone_state_for_undo()
+
+        // Record children's initial world positions for independent bone movement
+        if (this.bootstrap.edit_skeleton_step.independent_bone_movement.is_enabled()) {
+          const selected_bone = this.bootstrap.transform_controls.object
+          if (selected_bone !== undefined && selected_bone !== null) {
+            const mirror_bone = this.bootstrap.edit_skeleton_step.is_mirror_mode_enabled()
+              ? this.bootstrap.edit_skeleton_step.find_mirror_bone(selected_bone as Bone)
+              : undefined
+            this.bootstrap.edit_skeleton_step.independent_bone_movement.record_drag_start(selected_bone as Bone, mirror_bone)
+          }
+        }
       }
 
       // if we stopped dragging, that means a mouse up.

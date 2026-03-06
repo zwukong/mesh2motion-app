@@ -3,6 +3,7 @@ import { Generators } from '../../Generators.ts'
 import { Utility } from '../../Utilities.ts'
 import { UndoRedoSystem } from './UndoRedoSystem.ts'
 import { PreviewPlaneManager } from './PreviewPlaneManager.ts'
+import { IndependentBoneMovement } from './IndependentBoneMovement.ts'
 import {
   Vector3,
   Euler,
@@ -53,6 +54,7 @@ export class StepEditSkeleton extends EventTarget {
 
   private _added_event_listeners: boolean = false
   private readonly preview_plane_manager: PreviewPlaneManager = PreviewPlaneManager.getInstance()
+  public readonly independent_bone_movement: IndependentBoneMovement = new IndependentBoneMovement()
 
   constructor () {
     super()
@@ -206,6 +208,19 @@ export class StepEditSkeleton extends EventTarget {
     return this.mirror_mode_enabled
   }
 
+  /**
+   * Find the mirrored counterpart of a bone by stripping side suffixes and
+   * matching against the rest of the skeleton. Returns undefined for centre-line
+   * bones (spine, neck, head, etc.) that have no counterpart.
+   */
+  public find_mirror_bone (bone: Bone): Bone | undefined {
+    const base_name = Utility.calculate_bone_base_name(bone.name)
+    return this.threejs_skeleton.bones.find((candidate) => {
+      const candidate_base = Utility.calculate_bone_base_name(candidate.name)
+      return candidate_base === base_name && candidate.name !== bone.name
+    })
+  }
+
   public algorithm (): string | null {
     return this.skinning_algorithm
   }
@@ -256,6 +271,12 @@ export class StepEditSkeleton extends EventTarget {
       this.ui.dom_mirror_skeleton_checkbox.addEventListener('change', (event) => {
         // mirror skeleton movements along the X axis
         this.set_mirror_mode_enabled(event.target.checked)
+      })
+    }
+
+    if (this.ui.dom_independent_bone_movement_checkbox !== null) {
+      this.ui.dom_independent_bone_movement_checkbox.addEventListener('change', (event) => {
+        this.independent_bone_movement.set_enabled(event.target.checked)
       })
     }
 
@@ -405,27 +426,10 @@ export class StepEditSkeleton extends EventTarget {
   }
 
   public apply_mirror_mode (selected_bone: Bone, transform_type: string): void {
-    // if we are on the positive side mirror mode is enabled
-    // we need to change the position of the bone on the other side of the mirror
-
-    // first step is to find the base bone name
-    // strip out the left/right and _L/_R from the name
-    // mixamo is a common skeleton that prefixes everything with mixamorig_, so remove that
-    const base_bone_name = Utility.calculate_bone_base_name(selected_bone.name)
-
-    // Find another bone that has the same base name
-    // that should be the mirror
-    let mirror_bone: Bone | undefined
-
-    this.threejs_skeleton.bones.forEach((bone) => {
-      const bone_name_to_compare = Utility.calculate_bone_base_name(bone.name)
-      if (bone_name_to_compare === base_bone_name && bone.name !== selected_bone.name) {
-        mirror_bone = bone
-      }
-    })
+    const mirror_bone = this.find_mirror_bone(selected_bone)
 
     if (mirror_bone === undefined) {
-      return // we probably something along the axis (head, neck, spine)
+      return // centre-line bone (head, neck, spine) — no counterpart
     }
 
     if (transform_type === 'translate') {
@@ -448,6 +452,7 @@ export class StepEditSkeleton extends EventTarget {
       mirror_bone.quaternion.setFromEuler(euler)
     }
 
+    // updateWorldMatrix(updateParents, updateChildren) - propagate changes up and down the hierarchy
     mirror_bone.updateWorldMatrix(true, true)
   }
 
